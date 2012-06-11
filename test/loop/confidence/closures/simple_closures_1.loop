@@ -4,5 +4,5 @@ comp(fn) ->
   fn.@call() * 2
 
 main ->
-  comp(@() ->
+  comp(@() -> 
     50)
