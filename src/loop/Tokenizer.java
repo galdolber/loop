@@ -272,6 +272,7 @@ public class Tokenizer {
           indents = 0;
           currentIsFunction = false;
           break;
+        case LBRACKET:
         case LPAREN:
           if (currentIsAnnonymous) {
             annonymousFunctions.set(annonymousFunctions.size() - 1, annonymousFunctions
@@ -279,13 +280,14 @@ public class Tokenizer {
           }
           parens++;
           break;
+        case RBRACKET:
         case RPAREN:
           if (currentIsAnnonymous && currentAnnonymousPassedArgs) {
             annonymousFunctions.set(annonymousFunctions.size() - 1, annonymousFunctions
                 .lastElement() - 1);
             int annonymousFunctionsSize = annonymousFunctions.size();
-            int nextIndex = iterator.nextIndex();
-            if (token.kind != Kind.LBRACE && tokens.size() > nextIndex && tokens.get(nextIndex).kind != Kind.RBRACE
+            int nextIndex = iterator.nextIndex() - 1;
+            if (tokens.size() > nextIndex && tokens.get(nextIndex).kind != Kind.RBRACE
                 && (annonymousFunctionsSize == 0 || annonymousFunctions.lastElement() == 0)) {
               iterator.previous();
               iterator.add(new Token("}", Token.Kind.RBRACE, previous.line, previous.column));
@@ -348,14 +350,8 @@ public class Tokenizer {
       previous = token;
     }
     for (int i = 0; i < braces; i++) {
-      int insertIndents = braces - i - 1;
-      for (int j = 0; j < insertIndents; j++) {
-        tokens.add(new Token(" ", Token.Kind.INDENT, 0, 0));
-      }
       tokens.add(new Token("}", Token.Kind.RBRACE, 0, 0));
-      tokens.add(new Token("\n", Token.Kind.EOL, 0, 0));
     }
-    prettyPrintTokens(tokens);
     return tokens;
   }
 
