@@ -115,7 +115,7 @@ public class TokenizerTest {
     compare("func ( x , y , z ) -> { \n" +
         " ~ ~ @ ( ) -> { \n" +
         " ~ ~ ~ ~ 1 + 2 . toString ( ) \n" +
-        " } } \n" +
+        " } \n } \n \n" +
         " func2 -> { \n" +
         " ~ ~ answer }", "func (x, y, z) ->\n  @() ->\n    1 + 2.toString()\n\nfunc2 ->\n  answer");
   }

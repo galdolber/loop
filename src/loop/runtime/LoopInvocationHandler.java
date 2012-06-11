@@ -3,11 +3,9 @@ package loop.runtime;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
 
 import loop.Executable;
-import loop.Loop;
 import loop.ast.script.ModuleLoader;
 
 /**
@@ -29,8 +27,13 @@ public class LoopInvocationHandler implements InvocationHandler {
       throw new RuntimeException("Unable to find/compile: " + name + ".loop");
 
     Executable executable = executables.get(0);
-    this.clazz = executable.getCompiled();
-    this.loopFile = executable.file();
+    if (executable.hasErrors()) {
+      executable.printErrorsTo(System.out, executable.getStaticErrors());
+      throw new RuntimeException();
+    } else {
+      this.clazz = executable.getCompiled();
+      this.loopFile = executable.file();
+    }
   }
 
   @Override
