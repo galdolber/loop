@@ -1,0 +1,7 @@
+main ->
+  print("Something"),
+  f1() + f2()
+  where
+    f1() -> "hello "
+    f2() -> 
+      "goodbye"

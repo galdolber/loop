@@ -4,7 +4,7 @@ main ->
   scan([100, scal(),3])
   where
     scan(ls) =>
-      []                    : []
-      [x]       | sc() < 10    : [x]
-                | x > 10    : [10]
-      [x:xs]                : sclan(xs) + x
+      []                      : []
+      [x]       | sc() < 10   : [x]
+                | x > 10      : [10]
+      [x:xs]                  : sclan(xs) + x

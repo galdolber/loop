@@ -42,6 +42,11 @@ public class BasicFunctionsConfidenceTest extends LoopTest {
   public final void freeExpressionsInInitializerBlock() {
     assertEquals("bye", Loop.run("test/loop/confidence/free_exprs.loop"));
   }
+  
+  @Test
+  public final void localScopeWithMultipleFunctions() {
+    assertEquals("hello goodbye", Loop.run("test/loop/confidence/local_scope.loop"));
+  }
 
   @Test
   public final void counterIfThenElseTailCallElimination() {

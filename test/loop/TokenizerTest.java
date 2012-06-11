@@ -115,7 +115,7 @@ public class TokenizerTest {
     compare("func ( x , y , z ) -> { \n" +
         " ~ ~ @ ( ) -> { \n" +
         " ~ ~ ~ ~ 1 + 2 . toString ( ) \n" +
-        " } } \n" +
+        " } \n } \n \n" +
         " func2 -> { \n" +
         " ~ ~ answer }", "func (x, y, z) ->\n  @() ->\n    1 + 2.toString()\n\nfunc2 ->\n  answer");
   }
@@ -133,8 +133,8 @@ public class TokenizerTest {
   @Test
   public final void compoundMultilineStatements() {
     compare("class Me \n ~ ~ talk : -> { \n ~ ~ 'hi' }", "class Me \n  talk: ->\n  'hi'");
-    compare("class Me \n ~ ~ constructor : -> { \n ~ ~ @my : your \n ~ ~ talk : -> { \n ~ 'hi' } }",
-            "class Me\n  constructor: ->\n  @my: your\n  talk : -> \n 'hi'");
+    compare("class Me \n ~ ~ constructor : -> { \n ~ ~ @my : your \n ~ ~ talk : -> { 'hi' } }",
+            "class Me\n  constructor: ->\n  @my: your\n  talk : -> 'hi'");
     compare("class Me \n ~ ~ talk : -> { \n ~ ~ 'hi' . to_i 15 , true }",
             "class Me \n  talk: ->\n  'hi'.to_i 15, true");
     compare("class Me extends You , Him \n ~ ~ talk : -> { \n ~ ~ 'hi' . to_i ( 15 , true ) }",

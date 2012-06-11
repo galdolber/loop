@@ -3,9 +3,12 @@ package loop;
 import java.io.IOException;
 import java.io.StringReader;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Stack;
+
+import loop.Token.Kind;
 
 /**
  * @author Dhanji R. Prasanna
@@ -24,7 +27,8 @@ public class Tokenizer {
         if (!line.trim().isEmpty())
           cleaned.append(line);
 
-        // Append newlines for all but the last line, because we don't want to introduce an
+        // Append newlines for all but the last line, because we don't want to
+        // introduce an
         // unnecessary newline at the eof.
         if (i < linesSize - 1)
           cleaned.append('\n');
@@ -106,7 +110,8 @@ public class Tokenizer {
             leading = false;
             continue;
           }
-          // it's a string terminator but it's ok, it's part of the string, ignore...
+          // it's a string terminator but it's ok, it's part of the string,
+          // ignore...
 
         } else {
           // Also bake if there is any leading tokenage.
@@ -146,7 +151,7 @@ public class Tokenizer {
         inDelimiter = false;
 
         if (!inWhitespace) {
-          //bake token
+          // bake token
           bakeToken(tokens, input, i, start, line, column);
           inWhitespace = true;
         }
@@ -209,95 +214,154 @@ public class Tokenizer {
   }
 
   private List<Token> cleanTokens(List<Token> tokens) {
-    // Analyze token stream and remove line breaks inside groups and such.
-    int groups = 0;
-    Stack<Token.Kind> groupStack = new Stack<Token.Kind>();
-
-    for (ListIterator<Token> iterator = tokens.listIterator(); iterator.hasNext();) {
+    ListIterator<Token> iterator = tokens.listIterator();
+    Stack<Integer> annonymousFunctions = new Stack<Integer>();
+    int lastIndents = -1;
+    int indents = 0;
+    int parens = 0;
+    Token previous = null;
+    int braces = 0;
+    boolean previousIsGuarded = false;
+    boolean currentIsFunction = false;
+    boolean currentIsAnnonymous = false;
+    boolean currentAnnonymousPassedArgs = false;
+    while (iterator.hasNext()) {
       Token token = iterator.next();
-
-      if (Token.Kind.LPAREN == token.kind
-          || Token.Kind.LBRACE == token.kind
-          || Token.Kind.LBRACKET == token.kind) {
-        groupStack.push(token.kind);
-        groups++;
-      } else if (Token.Kind.RPAREN == token.kind
-          || Token.Kind.RBRACE == token.kind
-          || Token.Kind.RBRACKET == token.kind) {
-        if (!groupStack.empty() && groupStack.peek() == token.kind)
-          groupStack.pop();
-        groups--;
+      switch (token.kind) {
+        case INDENT:
+          if (parens > 0) {
+            iterator.remove();
+          } else {
+            indents++;
+          }
+          break;
+        case EOL:
+          if (parens > 0) {
+            iterator.remove();
+          } else if (previous != null) {
+            switch (previous.kind) {
+              case EOL:
+              case INDENT:
+                while (braces > 0 && indents < braces) {
+                  iterator.previous();
+                  iterator.add(new Token("}", Token.Kind.RBRACE, previous.line, previous.column));
+                  iterator.add(new Token("\n", Token.Kind.EOL, previous.line, previous.column));
+                  for (int j = 0; j < indents; j++) {
+                    iterator.add(new Token(" ", Token.Kind.INDENT, previous.line, previous.column));
+                  }
+                  iterator.next();
+                  braces--;
+                }
+                break;
+              default:
+                int nextIndex = iterator.nextIndex();
+                while (nextIndex < tokens.size() && tokens.get(nextIndex).kind == Kind.INDENT) {
+                  nextIndex++;
+                }
+                if (nextIndex < tokens.size() && tokens.get(nextIndex).kind == Kind.IDENT
+                    && nextIndex - iterator.nextIndex() == indents && currentIsFunction) {
+                  iterator.previous();
+                  iterator.add(new Token("}", Token.Kind.RBRACE, previous.line, previous.column));
+                  iterator.next();
+                  braces--;
+                }
+                break;
+            }
+          }
+          lastIndents = indents;
+          indents = 0;
+          currentIsFunction = false;
+          break;
+        case LBRACKET:
+        case LPAREN:
+          if (currentIsAnnonymous) {
+            annonymousFunctions.set(annonymousFunctions.size() - 1, annonymousFunctions
+                .lastElement() + 1);
+          }
+          parens++;
+          break;
+        case RBRACKET:
+        case RPAREN:
+          if (currentIsAnnonymous && currentAnnonymousPassedArgs) {
+            annonymousFunctions.set(annonymousFunctions.size() - 1, annonymousFunctions
+                .lastElement() - 1);
+            int annonymousFunctionsSize = annonymousFunctions.size();
+            int nextIndex = iterator.nextIndex() - 1;
+            if (tokens.size() > nextIndex && tokens.get(nextIndex).kind != Kind.RBRACE
+                && (annonymousFunctionsSize == 0 || annonymousFunctions.lastElement() == 0)) {
+              iterator.previous();
+              iterator.add(new Token("}", Token.Kind.RBRACE, previous.line, previous.column));
+              iterator.next();
+              braces--;
+              if (annonymousFunctionsSize > 0) {
+                annonymousFunctions.pop();
+              }
+              currentIsAnnonymous = false;
+            }
+          }
+          parens--;
+          break;
+        case ANONYMOUS_TOKEN:
+          currentAnnonymousPassedArgs = false;
+          annonymousFunctions.push(0);
+          currentIsAnnonymous = true;
+          break;
+        case RBRACE:
+          if (currentIsAnnonymous) {
+            currentIsAnnonymous = false;
+            annonymousFunctions.pop();
+          }
+          break;
+        case ARROW:
+        case HASHROCKET:
+          if (currentIsAnnonymous) {
+            currentAnnonymousPassedArgs = true;
+          }
+          if (tokens.get(iterator.nextIndex()).kind != Kind.LBRACE) {
+            currentIsFunction = true;
+            iterator.add(new Token("{", Token.Kind.LBRACE, previous.line, previous.column));
+            braces++;
+          }
+          break;
+        case WHERE:
+          break;
+        case PIPE:
+          if (previous != null && previous.kind == Token.Kind.INDENT) {
+            previousIsGuarded = true;
+          }
+          break;
+        default:
+          if (parens == 0 && previous != null && previous.kind == Token.Kind.INDENT
+              && lastIndents > indents) {
+            if (previousIsGuarded) {
+              previousIsGuarded = false;
+              break;
+            }
+            iterator.previous();
+            iterator.add(new Token("}", Token.Kind.RBRACE, previous.line, previous.column));
+            iterator.add(new Token("\n", Token.Kind.EOL, previous.line, previous.column));
+            for (int j = 0; j < indents; j++) {
+              iterator.add(new Token(" ", Token.Kind.INDENT, previous.line, previous.column));
+            }
+            iterator.next();
+            braces--;
+          }
       }
-
-      // Remove token.
-      if (groups > 0
-          && (token.kind == Token.Kind.EOL || token.kind == Token.Kind.INDENT))
-        iterator.remove();
+      previous = token;
     }
-
-    // Iterate again and dress function bodies with { }
-    groupStack = new Stack<Token.Kind>();
-    for (ListIterator<Token> iterator = tokens.listIterator(); iterator.hasNext();) {
-      Token token = iterator.next();
-
-      // Insert new function start token if necessary.
-      if (isThinOrFatArrow(token)) {
-        // Don't bother doing this if there is already an lbrace next.
-        if (iterator.hasNext() && iterator.next().kind != Token.Kind.LBRACE) {
-          iterator.previous();
-          iterator.add(new Token("{", Token.Kind.LBRACE, token.line, token.column));
-          groupStack.push(Token.Kind.LBRACE);
-        }
-      }
-
-      Token previous = null;
-      if (iterator.previousIndex() - 1 >= 0)
-        previous = tokens.get(iterator.previousIndex() - 1);
-
-      if ( (token.kind == Token.Kind.EOL
-          && (previous != null
-          && (isThinOrFatArrow(previous) || previous.kind == Token.Kind.EOL)))
-          || ((token.kind == Token.Kind.RPAREN && groups > 0))) {
-
-        while (!groupStack.isEmpty() && groupStack.peek() == Token.Kind.LBRACE) {
-          // Add before cursor.
-          Token prev = iterator.previous();
-          iterator.add(new Token("}", Token.Kind.RBRACE, prev.line, prev.column));
-          iterator.next();
-
-          groupStack.pop();
-        }
-      }
-
-
-      if (Token.Kind.LPAREN == token.kind) {
-        groupStack.push(Token.Kind.LPAREN);
-      } else if (Token.Kind.RPAREN == token.kind) {
-        while (groupStack.peek() != Token.Kind.LPAREN) {
-          // Add before cursor.
-          Token prev = iterator.previous();
-          iterator.add(new Token("}", Token.Kind.RBRACE, prev.line, prev.column));
-          iterator.next();
-
-          groupStack.pop();
-        }
-
-        // Pop the matching lparen.
-        groupStack.pop();
-      }
+    for (int i = 0; i < braces; i++) {
+      tokens.add(new Token("}", Token.Kind.RBRACE, 0, 0));
     }
-
-    // Close dangling functions
-    while (!groupStack.isEmpty())
-      if (groupStack.pop() == Token.Kind.LBRACE) {
-        tokens.add(new Token("}", Token.Kind.RBRACE, 0, 0));
-      }
-
     return tokens;
   }
 
-  private static boolean isThinOrFatArrow(Token token) {
-    return token.kind == Token.Kind.ARROW || (token.kind == Token.Kind.HASHROCKET);
+  /**
+   * Utility function to prettyPrint a list of tokens(for debugging).
+   */
+  void prettyPrintTokens(List<Token> tokens) {
+    for (Token token : tokens) {
+      System.out.print(token.value);
+    }
   }
 
   private static boolean isWhitespace(char c) {
@@ -326,12 +390,8 @@ public class Tokenizer {
     return DELIMITERS[c] != NON;
   }
 
-  private static void bakeToken(List<Token> tokens,
-                                char[] input,
-                                int i,
-                                int start,
-                                int line,
-                                int column) {
+  private static void bakeToken(List<Token> tokens, char[] input, int i, int start, int line,
+      int column) {
     if (i > start) {
       String value = new String(input, start, i - start);
 
